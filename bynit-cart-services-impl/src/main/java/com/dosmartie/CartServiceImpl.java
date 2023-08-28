@@ -17,6 +17,8 @@ import org.springframework.web.client.RestTemplate;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.dosmartie.helper.Constants.REMOVE_SPECIAL_CHARACTER_REGEX;
+
 @Service
 public class CartServiceImpl implements CartService {
     private final CartRepository cartRepository;
@@ -68,8 +70,9 @@ public class CartServiceImpl implements CartService {
     @Override
     public synchronized BaseResponse<List<ProductResponse>> clearCartItems(String email) {
         try {
-            return getCartProductViaUserEmail(email).map(cart -> {
-                cart.getCartProducts().get(email).clear();
+            String userEmail = email.replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, "");
+            return getCartProductViaUserEmail(userEmail).map(cart -> {
+                cart.getCartProducts().get(userEmail).clear();
                 return listResponseMessage.setSuccessResponse("Item removed", migrateCartObjects(cartRepository.save(cart).getUserEmail()));
             }).orElseGet(() -> listResponseMessage.setFailureResponse("No Cart Found"));
         } catch (Exception exception) {
@@ -98,11 +101,16 @@ public class CartServiceImpl implements CartService {
     @Override
     public BaseResponse<List<ProductResponse>> viewCartItems(String email) {
         try {
-            return getCartProductViaUserEmail(email).map(cart -> listResponseMessage.setSuccessResponse("Fetched result", cart.getCartProducts().get(email)))
-                    .orElseGet(() -> listResponseMessage.setFailureResponse("No cart is available for the guestID"));
+            String userEmail = convertEmailToUserEmail(email);
+            return getCartProductViaUserEmail(userEmail).map(cart -> listResponseMessage.setSuccessResponse("Fetched result", cart.getCartProducts().get(userEmail)))
+                    .orElseGet(() -> listResponseMessage.setFailureResponse("No cart is available"));
         } catch (Exception exception) {
             return listResponseMessage.setFailureResponse("Unable to fetch data", exception);
         }
+    }
+
+    private String convertEmailToUserEmail(String email) {
+        return email.replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, "");
     }
 
     private List<ProductResponse> createCart(CartRequest cartRequest) throws OutOfQuantityException {
@@ -160,14 +168,14 @@ public class CartServiceImpl implements CartService {
         BeanUtils.copyProperties(cartRequest.getCartProduct(), productResponse);
         productResponse.setPrice(price);
         productRequestList.add(productResponse);
-        cartUpdate.put(cartRequest.getUserEmail(), productRequestList);
-        cart.setUserEmail(cartRequest.getUserEmail());
+        cartUpdate.put(convertEmailToUserEmail(cartRequest.getUserEmail()), productRequestList);
+        cart.setUserEmail(convertEmailToUserEmail(cartRequest.getUserEmail()));
         cart.setCartProducts(cartUpdate);
         return migrateCartObjects(cartRepository.save(cart).getUserEmail());
     }
 
-    private synchronized List<ProductResponse> migrateCartObjects(String guestId) {
-        return viewCartItems(guestId).getData();
+    private synchronized List<ProductResponse> migrateCartObjects(String userEmail) {
+        return viewCartItems(userEmail).getData();
     }
 
     //todo: Rest template call to feign
@@ -183,7 +191,7 @@ public class CartServiceImpl implements CartService {
 
     private Cart serializeCartRequest(CartRequest cartRequest, Cart cart, ProductResponse productResponse) {
         AtomicBoolean productExist = new AtomicBoolean(false);
-        cart.getCartProducts().get(cartRequest.getUserEmail()).forEach((cartItem) -> {
+        cart.getCartProducts().get(convertEmailToUserEmail(cartRequest.getUserEmail())).forEach((cartItem) -> {
             if (cartItem.getSku().equals(cartRequest.getCartProduct().getSku())) {
                 productExist.set(true);
                 cartItem.setQuantity(cartRequest.getCartProduct().getQuantity());
@@ -194,12 +202,12 @@ public class CartServiceImpl implements CartService {
             double price = productResponse.getPrice();
             BeanUtils.copyProperties(cartRequest.getCartProduct(), productResponse);
             productResponse.setPrice(price);
-            cart.getCartProducts().get(cartRequest.getUserEmail()).add(productResponse);
+            cart.getCartProducts().get(convertEmailToUserEmail(cartRequest.getUserEmail())).add(productResponse);
         }
         return cart;
     }
 
     private synchronized Optional<Cart> getCartProductViaUserEmail(String email) {
-        return cartRepository.findByUserEmail(email);
+        return cartRepository.findByUserEmail(convertEmailToUserEmail(email));
     }
 }

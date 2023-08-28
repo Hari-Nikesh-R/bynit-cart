@@ -11,9 +11,9 @@ import java.util.Objects;
 public interface CartService {
     ResponseEntity<?> addToCart(CartRequest cartRequest);
     BaseResponse<Object> clearCart();
-    BaseResponse<List<ProductResponse>> clearCartItems(String guestId);
-    BaseResponse<?> deleteItem(String guestId, String productName);
-    BaseResponse<List<ProductResponse>> viewCartItems(String guestId);
+    BaseResponse<List<ProductResponse>> clearCartItems(String userEmail);
+    BaseResponse<?> deleteItem(String userEmail, String productName);
+    BaseResponse<List<ProductResponse>> viewCartItems(String userEmail);
 
 
 }

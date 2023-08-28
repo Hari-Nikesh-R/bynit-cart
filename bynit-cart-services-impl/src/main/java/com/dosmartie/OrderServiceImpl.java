@@ -145,8 +145,8 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private synchronized void clearCartItem(String guestId) {
-        cartService.clearCartItems(guestId);
+    private synchronized void clearCartItem(String userEmail) {
+        cartService.clearCartItems(userEmail);
     }
 
 }

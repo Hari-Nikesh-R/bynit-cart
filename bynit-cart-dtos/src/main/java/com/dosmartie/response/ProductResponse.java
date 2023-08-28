@@ -6,8 +6,11 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
+import java.io.Serializable;
+import java.util.List;
+
 @Data
-public class ProductResponse {
+public class ProductResponse implements Serializable {
     @Pattern(regexp = "^[a-zA-Z_ ]*$", message = "Invalid brand")
     private String brand;
     @Pattern(regexp = "^[a-zA-Z_ ]*$", message = "Invalid ProductName")
@@ -20,7 +23,6 @@ public class ProductResponse {
     @NotNull(message = "Quantity must not be null")
     @Positive(message = "Quantity must not be negative or zero")
     private Integer quantity;
-    private String description;
     private String category;
     @NotNull(message = "Price must not be null")
     @Positive(message = "Price cannot be negative")
