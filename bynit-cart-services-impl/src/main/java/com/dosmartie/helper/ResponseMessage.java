@@ -17,4 +17,8 @@ public class ResponseMessage<T> {
     public synchronized BaseResponse<T> setFailureResponse(String errorDesc) {
         return new BaseResponse<>(null, errorDesc, false, HttpStatus.BAD_REQUEST.value(), null);
     }
+
+    public synchronized BaseResponse<T> setUnauthorizedResponse(String errorDesc) {
+        return new BaseResponse<>(null, errorDesc, false, HttpStatus.FORBIDDEN.value(), null);
+    }
 }

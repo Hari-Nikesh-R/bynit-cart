@@ -1,6 +1,7 @@
 package com.dosmartie;
 
 
+import com.dosmartie.helper.PropertiesCollector;
 import com.dosmartie.helper.ResponseMessage;
 import com.dosmartie.request.CartRequest;
 import com.dosmartie.request.ProductRequest;
@@ -28,6 +29,9 @@ public class CartServiceImpl implements CartService {
     private final RestTemplate restTemplate;
 
     @Autowired
+    private PropertiesCollector propertiesCollector;
+
+    @Autowired
     public CartServiceImpl(CartRepository cartRepository, ObjectMapper mapper, ResponseMessage<Object> responseMessage, ResponseMessage<List<ProductResponse>> listResponseMessage, RestTemplate restTemplate) {
         this.cartRepository = cartRepository;
         this.mapper = mapper;
@@ -37,31 +41,40 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    public ResponseEntity<?> addToCart(CartRequest cartRequest) {
+    public ResponseEntity<?> addToCart(CartRequest cartRequest, String authId) {
         try {
-            return getCartProductViaUserEmail(cartRequest.getUserEmail()).map(cart -> {
-                try {
-                    return ResponseEntity.ok(responseMessage.setSuccessResponse("Cart updated", updateCartItem(cart, cartRequest)));
-                } catch (OutOfQuantityException e) {
-                    return ResponseEntity.ok(responseMessage.setFailureResponse("Product Not available for purchase", e));
-                }
-            }).orElseGet(() -> {
-                try {
-                    return ResponseEntity.ok(responseMessage.setSuccessResponse("Product added to cart", createCart(cartRequest)));
-                } catch (OutOfQuantityException e) {
-                    return ResponseEntity.ok(responseMessage.setFailureResponse("Product Not available for purchase", e));
-                }
-            });
+            if (validateRequest(authId)) {
+                return getCartProductViaUserEmail(cartRequest.getUserEmail()).map(cart -> {
+                    try {
+                        return ResponseEntity.ok(responseMessage.setSuccessResponse("Cart updated", updateCartItem(cart, cartRequest)));
+                    } catch (OutOfQuantityException e) {
+                        return ResponseEntity.ok(responseMessage.setFailureResponse("Product Not available for purchase", e));
+                    }
+                }).orElseGet(() -> {
+                    try {
+                        return ResponseEntity.ok(responseMessage.setSuccessResponse("Product added to cart", createCart(cartRequest)));
+                    } catch (OutOfQuantityException e) {
+                        return ResponseEntity.ok(responseMessage.setFailureResponse("Product Not available for purchase", e));
+                    }
+                });
+            } else {
+                return ResponseEntity.ok(responseMessage.setUnauthorizedResponse("Access denied"));
+            }
         } catch (Exception exception) {
             return ResponseEntity.ok(responseMessage.setFailureResponse("Product is not updated cart", exception));
         }
     }
 
     @Override
-    public BaseResponse<Object> clearCart() {
+    public BaseResponse<Object> clearCart(String email, String authId) {
         try {
-            cartRepository.deleteAll();
-            return responseMessage.setSuccessResponse("Deleted Cart", null);
+            if (validateRequest(authId)) {
+                cartRepository.deleteAll();
+                return responseMessage.setSuccessResponse("Deleted Cart", null);
+            }
+            else {
+                return responseMessage.setUnauthorizedResponse("Access denied");
+            }
         } catch (Exception exception) {
             return responseMessage.setFailureResponse("Cart not cleared");
         }
@@ -81,18 +94,23 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    public BaseResponse<?> deleteItem(String email, String productName) {
+    public BaseResponse<?> deleteItem(String email, String itemSku, String authId) {
         try {
-            return getCartProductViaUserEmail(email).map(cart -> {
-                ProductResponse productResponse = cart.getCartProducts().get(email).stream().filter((product) -> product.getName().equals(productName)).findFirst().orElse(null);
-                if (Objects.nonNull(productResponse)) {
-                    cart.getCartProducts().get(email).remove(productResponse);
-                    cartRepository.save(cart);
-                    return responseMessage.setSuccessResponse("Item deleted", cart.getCartProducts().get(email));
-                } else {
-                    return responseMessage.setFailureResponse("No such product found in cart");
-                }
-            }).orElseGet(() -> responseMessage.setFailureResponse("No Cart found"));
+            if (validateRequest(authId)) {
+                return getCartProductViaUserEmail(email).map(cart -> {
+                    ProductResponse productResponse = cart.getCartProducts().get(email).stream().filter((product) -> product.getSku().equals(itemSku)).findFirst().orElse(null);
+                    if (Objects.nonNull(productResponse)) {
+                        cart.getCartProducts().get(email).remove(productResponse);
+                        cartRepository.save(cart);
+                        return responseMessage.setSuccessResponse("Item deleted", cart.getCartProducts().get(email));
+                    } else {
+                        return responseMessage.setFailureResponse("No such product found in cart");
+                    }
+                }).orElseGet(() -> responseMessage.setFailureResponse("No Cart found"));
+            }
+            else {
+                return responseMessage.setUnauthorizedResponse("Access denied");
+            }
         } catch (Exception exception) {
             return responseMessage.setFailureResponse("Unable to delete product", exception);
         }
@@ -119,7 +137,8 @@ public class CartServiceImpl implements CartService {
         return getProductAvailabilityAndConstructCart(productRequestList, cartRequest);
     }
 
-    private List<ProductResponse> getProductAvailabilityAndConstructCart(List<ProductRequest> productRequestList, CartRequest cartRequest) {
+    private List<ProductResponse> getProductAvailabilityAndConstructCart
+            (List<ProductRequest> productRequestList, CartRequest cartRequest) {
         String outOfStockError = "";
         List<ProductResponse> productResponses = new ArrayList<>();
         ProductQuantityCheckResponse[] productQuantityCheckResponse = productQuantityCheck(productRequestList);
@@ -137,7 +156,8 @@ public class CartServiceImpl implements CartService {
         }
     }
 
-    private List<ProductResponse> getProductAvailabilityAndConstructCart(List<ProductRequest> productRequestList, CartRequest cartRequest, Cart cart) {
+    private List<ProductResponse> getProductAvailabilityAndConstructCart
+            (List<ProductRequest> productRequestList, CartRequest cartRequest, Cart cart) {
         String outOfStockError = "";
         Cart cartUpdate = null;
         List<ProductResponse> productResponses = new ArrayList<>();
@@ -159,7 +179,8 @@ public class CartServiceImpl implements CartService {
         throw new OutOfQuantityException(outOfStockError);
     }
 
-    private List<ProductResponse> createCartInDb(CartRequest cartRequest, ProductQuantityCheckResponse productQuantityCheckResponse) {
+    private List<ProductResponse> createCartInDb(CartRequest cartRequest, ProductQuantityCheckResponse
+            productQuantityCheckResponse) {
         Cart cart = new Cart();
         Map<String, List<ProductResponse>> cartUpdate = new HashMap<>();
         List<ProductResponse> productRequestList = new ArrayList<>();
@@ -207,7 +228,13 @@ public class CartServiceImpl implements CartService {
         return cart;
     }
 
+    private synchronized boolean validateRequest(String auth) {
+        return propertiesCollector.getAuthId().equals(auth);
+    }
+
     private synchronized Optional<Cart> getCartProductViaUserEmail(String email) {
         return cartRepository.findByUserEmail(convertEmailToUserEmail(email));
     }
+
+
 }

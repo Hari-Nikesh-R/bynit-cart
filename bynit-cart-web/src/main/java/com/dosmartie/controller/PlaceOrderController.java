@@ -6,10 +6,9 @@ import com.dosmartie.request.CartOrderRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import static com.dosmartie.helper.Constants.AUTH_ID;
 
 
 @RestController
@@ -19,8 +18,8 @@ public class PlaceOrderController {
     private OrderService orderService;
 
     @PostMapping
-    public ResponseEntity<?> placeOrder(@RequestBody @Valid CartOrderRequest orderRequest) {
-        return orderService.placeOrder(orderRequest);
+    public ResponseEntity<?> placeOrder(@RequestBody @Valid CartOrderRequest orderRequest, @RequestHeader(AUTH_ID) String authId) {
+        return orderService.placeOrder(orderRequest, authId);
     }
 
 }

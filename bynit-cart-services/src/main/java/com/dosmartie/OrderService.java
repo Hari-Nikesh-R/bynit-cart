@@ -4,5 +4,5 @@ import com.dosmartie.request.CartOrderRequest;
 import org.springframework.http.ResponseEntity;
 
 public interface OrderService {
-    ResponseEntity<?> placeOrder(CartOrderRequest cartOrderRequest);
+    ResponseEntity<?> placeOrder(CartOrderRequest cartOrderRequest, String authId);
 }
