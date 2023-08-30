@@ -1,13 +1,13 @@
 package com.dosmartie;
 
 
-import com.dosmartie.helper.PropertiesCollector;
 import com.dosmartie.helper.ResponseMessage;
 import com.dosmartie.request.CartRequest;
 import com.dosmartie.request.ProductRequest;
 import com.dosmartie.response.BaseResponse;
 import com.dosmartie.response.ProductQuantityCheckResponse;
 import com.dosmartie.response.ProductResponse;
+import com.dosmartie.utils.EncryptionUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,22 +28,22 @@ public class CartServiceImpl implements CartService {
     private final ResponseMessage<List<ProductResponse>> listResponseMessage;
     private final RestTemplate restTemplate;
 
-    @Autowired
-    private PropertiesCollector propertiesCollector;
+    private final EncryptionUtils encryptionUtils;
 
     @Autowired
-    public CartServiceImpl(CartRepository cartRepository, ObjectMapper mapper, ResponseMessage<Object> responseMessage, ResponseMessage<List<ProductResponse>> listResponseMessage, RestTemplate restTemplate) {
+    public CartServiceImpl(CartRepository cartRepository, ObjectMapper mapper, ResponseMessage<Object> responseMessage, ResponseMessage<List<ProductResponse>> listResponseMessage, RestTemplate restTemplate, EncryptionUtils encryptionUtils) {
         this.cartRepository = cartRepository;
         this.mapper = mapper;
         this.responseMessage = responseMessage;
         this.listResponseMessage = listResponseMessage;
         this.restTemplate = restTemplate;
+        this.encryptionUtils = encryptionUtils;
     }
 
     @Override
     public ResponseEntity<?> addToCart(CartRequest cartRequest, String authId) {
         try {
-            if (validateRequest(authId)) {
+            if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
                 return getCartProductViaUserEmail(cartRequest.getUserEmail()).map(cart -> {
                     try {
                         return ResponseEntity.ok(responseMessage.setSuccessResponse("Cart updated", updateCartItem(cart, cartRequest)));
@@ -68,7 +68,7 @@ public class CartServiceImpl implements CartService {
     @Override
     public BaseResponse<Object> clearCart(String email, String authId) {
         try {
-            if (validateRequest(authId)) {
+            if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
                 cartRepository.deleteAll();
                 return responseMessage.setSuccessResponse("Deleted Cart", null);
             }
@@ -96,11 +96,11 @@ public class CartServiceImpl implements CartService {
     @Override
     public BaseResponse<?> deleteItem(String email, String itemSku, String authId) {
         try {
-            if (validateRequest(authId)) {
-                return getCartProductViaUserEmail(email).map(cart -> {
-                    ProductResponse productResponse = cart.getCartProducts().get(email).stream().filter((product) -> product.getSku().equals(itemSku)).findFirst().orElse(null);
+            if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
+                return getCartProductViaUserEmail(convertEmailToUserEmail(email)).map(cart -> {
+                    ProductResponse productResponse = cart.getCartProducts().get(convertEmailToUserEmail(email)).stream().filter((product) -> product.getSku().equals(itemSku)).findFirst().orElse(null);
                     if (Objects.nonNull(productResponse)) {
-                        cart.getCartProducts().get(email).remove(productResponse);
+                        cart.getCartProducts().get(convertEmailToUserEmail(email)).remove(productResponse);
                         cartRepository.save(cart);
                         return responseMessage.setSuccessResponse("Item deleted", cart.getCartProducts().get(email));
                     } else {
@@ -127,7 +127,7 @@ public class CartServiceImpl implements CartService {
         }
     }
 
-    private String convertEmailToUserEmail(String email) {
+    private synchronized String convertEmailToUserEmail(String email) {
         return email.replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, "");
     }
 
@@ -228,9 +228,7 @@ public class CartServiceImpl implements CartService {
         return cart;
     }
 
-    private synchronized boolean validateRequest(String auth) {
-        return propertiesCollector.getAuthId().equals(auth);
-    }
+
 
     private synchronized Optional<Cart> getCartProductViaUserEmail(String email) {
         return cartRepository.findByUserEmail(convertEmailToUserEmail(email));

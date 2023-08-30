@@ -7,6 +7,7 @@ import com.dosmartie.helper.Urls;
 import com.dosmartie.request.CartRequest;
 import com.dosmartie.response.BaseResponse;
 import com.dosmartie.response.ProductResponse;
+import com.dosmartie.utils.EncryptionUtils;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -23,9 +24,8 @@ public class CartController {
 
     @Autowired
     private CartService cartService;
-
     @Autowired
-    private PropertiesCollector propertiesCollector;
+    private EncryptionUtils encryptionUtils;
 
     @Autowired
     private ResponseMessage<List<ProductResponse>> responseMessage;
@@ -47,7 +47,7 @@ public class CartController {
 
     @DeleteMapping(value = Urls.CLEAR_CART)
     public BaseResponse<List<ProductResponse>> clearCartItem(@RequestParam("email") String email, @RequestHeader(AUTH_ID) String authId) {
-        if (propertiesCollector.getAuthId().equals(authId)) {
+        if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
             return cartService.clearCartItems(email);
         }
         return responseMessage.setUnauthorizedResponse("Access denied");
@@ -55,7 +55,7 @@ public class CartController {
 
     @GetMapping(value = Urls.VIEW)
     public BaseResponse<List<ProductResponse>> getCartItems(@RequestParam("email") String email, @RequestHeader(AUTH_ID) String authId) {
-        if (propertiesCollector.getAuthId().equals(authId)) {
+        if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
             return cartService.viewCartItems(email);
         }
         return responseMessage.setUnauthorizedResponse("Access denied");

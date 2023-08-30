@@ -9,6 +9,7 @@ import com.dosmartie.request.ProductRequest;
 import com.dosmartie.response.OrderResponse;
 import com.dosmartie.response.ProductQuantityCheckResponse;
 import com.dosmartie.response.ProductResponse;
+import com.dosmartie.utils.EncryptionUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -24,6 +25,7 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.dosmartie.helper.Constants.REMOVE_SPECIAL_CHARACTER_REGEX;
 import static com.dosmartie.helper.Urls.PRODUCT_ENDPOINT;
 
 @Service
@@ -38,23 +40,22 @@ public class OrderServiceImpl implements OrderService {
     private final CartService cartService;
 
 
-    private final PropertiesCollector propertiesCollector;
-
+   private final EncryptionUtils encryptionUtils;
     @Autowired
-    public OrderServiceImpl(RestTemplate restTemplate, KafkaTemplate<String, String> kafkaTemplate, ResponseMessage<Object> responseMessage, CartRepository cartRepository, CartService cartService, PropertiesCollector propertiesCollector) {
+    public OrderServiceImpl(RestTemplate restTemplate, KafkaTemplate<String, String> kafkaTemplate, ResponseMessage<Object> responseMessage, CartRepository cartRepository, CartService cartService, EncryptionUtils encryptionUtils) {
         this.restTemplate = restTemplate;
         this.kafkaTemplate = kafkaTemplate;
         this.responseMessage = responseMessage;
         this.cartRepository = cartRepository;
         this.cartService = cartService;
-        this.propertiesCollector = propertiesCollector;
+        this.encryptionUtils = encryptionUtils;
     }
 
     @Override
     public ResponseEntity<?> placeOrder(CartOrderRequest cartOrderRequest, String authId) {
         try {
-            if (validateRequest(authId)) {
-                Optional<Cart> optionalCart = cartRepository.findByUserEmail(cartOrderRequest.getEmail());
+            if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
+                Optional<Cart> optionalCart = cartRepository.findByUserEmail(cartOrderRequest.getEmail().replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, ""));
                 return optionalCart.map(cart -> {
                     try {
                         OrderResponse orderResponse = setObjectsForCreatingOrder(cart, cartOrderRequest);
@@ -78,10 +79,10 @@ public class OrderServiceImpl implements OrderService {
     private OrderResponse setObjectsForCreatingOrder(Cart cart, CartOrderRequest cartOrderRequest) {
         OrderRequest orderRequest = new OrderRequest();
         orderRequest.setOrderStatus(OrderStatus.COMPLETED);
-        orderRequest.setAvailableProduct(cart.getCartProducts().get(cartOrderRequest.getEmail()));
+        orderRequest.setAvailableProduct(cart.getCartProducts().get(cartOrderRequest.getEmail().replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, "")));
         orderRequest.setOrderedCustomerDetail(cartOrderRequest.getOrderedCustomerDetail());
         AtomicReference<Double> totalOrder = new AtomicReference<>();
-        cart.getCartProducts().get(cartOrderRequest.getEmail()).forEach((cartItems) -> totalOrder.set(cartItems.getPrice() * cartItems.getQuantity()));
+        cart.getCartProducts().get(cartOrderRequest.getEmail().replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, "")).forEach((cartItems) -> totalOrder.set(cartItems.getPrice() * cartItems.getQuantity()));
         orderRequest.setTotalOrder(totalOrder.get());
         orderRequest.setEmail(cartOrderRequest.getEmail());
         return createOrder(orderRequest);
@@ -151,7 +152,7 @@ public class OrderServiceImpl implements OrderService {
 
     //todo: change to Feign
     private synchronized <T> ProductQuantityCheckResponse[] productQuantityCheck(List<T> productRequest) {
-        return restTemplate.postForEntity("http://localhost:8089/product/quantity", productRequest, ProductQuantityCheckResponse[].class).getBody();
+        return restTemplate.postForEntity("http://localhost:8042/product/quantity", productRequest, ProductQuantityCheckResponse[].class).getBody();
     }
 
     // todo: Integrate Kafka
@@ -162,9 +163,6 @@ public class OrderServiceImpl implements OrderService {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-    private synchronized boolean validateRequest(String auth) {
-        return propertiesCollector.getAuthId().equals(auth);
     }
 
     private synchronized void clearCartItem(String userEmail) {
