@@ -8,6 +8,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 
 @Data
 public class ProductResponse implements Serializable {
@@ -27,4 +28,7 @@ public class ProductResponse implements Serializable {
     @NotNull(message = "Price must not be null")
     @Positive(message = "Price cannot be negative")
     private double price;
+    private boolean isRated;
+    private Map<String, String> reviews;
+    private double ratingBasedOnOrder;
 }

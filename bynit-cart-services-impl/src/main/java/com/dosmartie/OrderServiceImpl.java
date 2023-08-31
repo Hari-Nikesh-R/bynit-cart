@@ -19,10 +19,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.dosmartie.helper.Constants.REMOVE_SPECIAL_CHARACTER_REGEX;
@@ -59,8 +56,12 @@ public class OrderServiceImpl implements OrderService {
                 return optionalCart.map(cart -> {
                     try {
                         OrderResponse orderResponse = setObjectsForCreatingOrder(cart, cartOrderRequest);
-                        //clearCartItem(cartOrderRequest.getEmail());
-                        return ResponseEntity.ok(responseMessage.setSuccessResponse("Order Placed Successfully", orderResponse));
+
+                        if (Objects.isNull(orderResponse.getErrorDesc())) {
+                            //clearCartItem(cartOrderRequest.getEmail());
+                            return ResponseEntity.ok(responseMessage.setSuccessResponse("Order Placed Successfully", orderResponse));
+                        }
+                        return ResponseEntity.ok(responseMessage.setSuccessResponse("Order Not Placed", orderResponse));
 
                     } catch (Exception exception) {
                         log.error(exception.fillInStackTrace().getLocalizedMessage());
