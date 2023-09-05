@@ -1,6 +1,6 @@
-package com.dosmartie.response;
+package com.dosmartie.response.cart;
 
-import com.dosmartie.request.ProductRequest;
+import com.dosmartie.request.cart.ProductRequest;
 import lombok.Data;
 
 import java.util.List;

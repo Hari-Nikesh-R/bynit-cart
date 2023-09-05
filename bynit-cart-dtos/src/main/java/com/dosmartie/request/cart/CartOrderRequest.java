@@ -1,4 +1,4 @@
-package com.dosmartie.request;
+package com.dosmartie.request.cart;
 
 import jakarta.validation.Valid;
 import lombok.Data;

@@ -1,4 +1,4 @@
-package com.dosmartie.request;
+package com.dosmartie.request.cart;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotNull;

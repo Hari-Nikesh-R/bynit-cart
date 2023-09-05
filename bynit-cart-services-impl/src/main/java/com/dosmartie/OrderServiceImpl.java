@@ -1,19 +1,16 @@
 package com.dosmartie;
 
-import com.dosmartie.helper.PropertiesCollector;
 import com.dosmartie.helper.ResponseMessage;
-import com.dosmartie.request.CartOrderRequest;
-import com.dosmartie.request.OrderRequest;
-import com.dosmartie.request.OrderStatus;
-import com.dosmartie.request.ProductRequest;
-import com.dosmartie.response.OrderResponse;
-import com.dosmartie.response.ProductQuantityCheckResponse;
-import com.dosmartie.response.ProductResponse;
+import com.dosmartie.request.cart.CartOrderRequest;
+import com.dosmartie.request.cart.OrderRequest;
+import com.dosmartie.request.cart.ProductRequest;
+import com.dosmartie.response.cart.OrderResponse;
+import com.dosmartie.response.cart.ProductQuantityCheckResponse;
+import com.dosmartie.response.cart.ProductResponse;
 import com.dosmartie.utils.EncryptionUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -30,73 +27,65 @@ import static com.dosmartie.helper.Urls.PRODUCT_ENDPOINT;
 public class OrderServiceImpl implements OrderService {
     private final RestTemplate restTemplate;
     private final KafkaTemplate<String, String> kafkaTemplate;
+    private final OrderRepository orderRepository;
 
     private final ResponseMessage<Object> responseMessage;
 
     private final CartRepository cartRepository;
     private final CartService cartService;
+    private final ObjectMapper mapper;
+    private final EncryptionUtils encryptionUtils;
 
-
-   private final EncryptionUtils encryptionUtils;
-    @Autowired
-    public OrderServiceImpl(RestTemplate restTemplate, KafkaTemplate<String, String> kafkaTemplate, ResponseMessage<Object> responseMessage, CartRepository cartRepository, CartService cartService, EncryptionUtils encryptionUtils) {
+    public OrderServiceImpl(RestTemplate restTemplate, KafkaTemplate<String, String> kafkaTemplate, OrderRepository orderRepository, ResponseMessage<Object> responseMessage, CartRepository cartRepository, CartService cartService, ObjectMapper mapper, EncryptionUtils encryptionUtils) {
         this.restTemplate = restTemplate;
         this.kafkaTemplate = kafkaTemplate;
+        this.orderRepository = orderRepository;
         this.responseMessage = responseMessage;
         this.cartRepository = cartRepository;
         this.cartService = cartService;
+        this.mapper = mapper;
         this.encryptionUtils = encryptionUtils;
     }
 
     @Override
-    public ResponseEntity<?> placeOrder(CartOrderRequest cartOrderRequest, String authId) {
+    public ResponseEntity<?> placeOrder(CartOrderRequest cartOrderRequest, String email) {
         try {
-            if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
-                Optional<Cart> optionalCart = cartRepository.findByUserEmail(cartOrderRequest.getEmail().replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, ""));
-                return optionalCart.map(cart -> {
-                    try {
-                        OrderResponse orderResponse = setObjectsForCreatingOrder(cart, cartOrderRequest);
-
-                        if (Objects.isNull(orderResponse.getErrorDesc())) {
-                            //clearCartItem(cartOrderRequest.getEmail());
-                            return ResponseEntity.ok(responseMessage.setSuccessResponse("Order Placed Successfully", orderResponse));
-                        }
-                        return ResponseEntity.ok(responseMessage.setSuccessResponse("Order Not Placed", orderResponse));
-
-                    } catch (Exception exception) {
-                        log.error(exception.fillInStackTrace().getLocalizedMessage());
-                        return ResponseEntity.ok(responseMessage.setFailureResponse("No Cart Found", exception));
+            log.info("Email set successfully");
+            cartOrderRequest.setEmail(email);
+            Optional<Cart> optionalCart = cartRepository.findByUserEmail(cartOrderRequest.getEmail().replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, ""));
+            return optionalCart.map(cart -> {
+                try {
+                    log.info("Cart found");
+                    OrderResponse orderResponse = setObjectsForCreatingOrder(cart, cartOrderRequest);
+                    if (Objects.isNull(orderResponse.getErrorDesc())) {
+                        //clearCartItem(cartOrderRequest.getEmail());
+                        return ResponseEntity.ok(responseMessage.setSuccessResponse("Order Placed Successfully", orderResponse));
                     }
-                }).orElseGet(() -> ResponseEntity.ok(responseMessage.setFailureResponse("No Cart Found")));
-            }
-            else {
-                return ResponseEntity.ok(responseMessage.setUnauthorizedResponse("Access denied"));
-            }
+                    return ResponseEntity.ok(responseMessage.setSuccessResponse("Order Not Placed", orderResponse));
+                } catch (Exception exception) {
+                    log.error(exception.fillInStackTrace().getLocalizedMessage());
+                    return ResponseEntity.ok(responseMessage.setFailureResponse("No Cart Found", exception));
+                }
+            }).orElseGet(() -> ResponseEntity.ok(responseMessage.setFailureResponse("No Cart Found")));
+
         } catch (Exception exception) {
             return ResponseEntity.ok(responseMessage.setFailureResponse("Unable to place order", exception));
         }
     }
 
     private OrderResponse setObjectsForCreatingOrder(Cart cart, CartOrderRequest cartOrderRequest) {
-        OrderRequest orderRequest = new OrderRequest();
-        orderRequest.setOrderStatus(OrderStatus.COMPLETED);
-        orderRequest.setAvailableProduct(cart.getCartProducts().get(cartOrderRequest.getEmail().replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, "")));
-        orderRequest.setOrderedCustomerDetail(cartOrderRequest.getOrderedCustomerDetail());
-        AtomicReference<Double> totalOrder = new AtomicReference<>();
-        cart.getCartProducts().get(cartOrderRequest.getEmail().replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, "")).forEach((cartItems) -> totalOrder.set(cartItems.getPrice() * cartItems.getQuantity()));
-        orderRequest.setTotalOrder(totalOrder.get());
-        orderRequest.setEmail(cartOrderRequest.getEmail());
-        return createOrder(orderRequest);
+
+        OrderResponse orderResponse = mapper.convertValue(orderRepository.save(initiateOrderForTracking(cart, cartOrderRequest)), OrderResponse.class);
+        log.info("Saving Order");
+        return placeCreateOrder(orderResponse);
     }
 
-    private OrderResponse createOrder(OrderRequest orderRequest) {
+    private OrderResponse placeCreateOrder(OrderResponse orderResponse) {
         try {
-            if (checkProductOutOfStock(productQuantityCheck(orderRequest.getAvailableProduct()))) {
-                reduceStockFromInventory(orderRequest);
-                orderRequest.setOrderId(generateOrderId());
-                publishToOrderService(orderRequest);
-                OrderResponse orderResponse = new OrderResponse();
-                BeanUtils.copyProperties(orderRequest, orderResponse);
+            if (checkProductOutOfStock(productQuantityCheck(orderResponse.getAvailableProduct()))) {
+                log.info("Product stock available");
+                reduceStockFromInventory(orderResponse);
+                // publishToOrderService(orderRequest);
                 return orderResponse;
             } else {
                 //todo: If we need to remove and proceed the product // orderRequest.setAvailableProduct(removeItemRegardsOutOfStock(productQuantityCheck(orderRequest.getAvailableProduct())));
@@ -110,6 +99,20 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    private Order initiateOrderForTracking(Cart cart, CartOrderRequest cartOrderRequest) {
+        log.info("Initiating Order for tracking");
+        Order order = new Order();
+        order.setAvailableProduct(cart.getCartProducts().get(cartOrderRequest.getEmail().replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, "")));
+        order.setOrderedCustomerDetail(cartOrderRequest.getOrderedCustomerDetail());
+        AtomicReference<Double> totalOrder = new AtomicReference<>();
+        cart.getCartProducts().get(cartOrderRequest.getEmail().replaceAll(REMOVE_SPECIAL_CHARACTER_REGEX, "")).forEach((cartItems) -> totalOrder.set(cartItems.getPrice() * cartItems.getQuantity()));
+        order.setTotalOrder(totalOrder.get());
+        order.setEmail(cartOrderRequest.getEmail());
+        log.info("Order Object created");
+        return order;
+    }
+
+
     private String generateOrderId() {
         String orderCharacter = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
         StringBuilder salt = new StringBuilder();
@@ -121,14 +124,14 @@ public class OrderServiceImpl implements OrderService {
         return salt.toString();
     }
 
-    private void reduceStockFromInventory(OrderRequest orderRequest) {
+    private void reduceStockFromInventory(OrderResponse orderResponse) {
         List<ProductRequest> purchaseRequests = new ArrayList<>();
-        orderRequest.getAvailableProduct().forEach((product) -> {
+        orderResponse.getAvailableProduct().forEach((product) -> {
             ProductRequest purchaseRequest = new ProductRequest();
             BeanUtils.copyProperties(product, purchaseRequest);
             purchaseRequests.add(purchaseRequest);
         });
-        //todo: change Rest template to Feign
+        log.info("Made rest template call for stock reduction");
         restTemplate.put(PRODUCT_ENDPOINT, purchaseRequests);
     }
 
@@ -160,6 +163,7 @@ public class OrderServiceImpl implements OrderService {
     private void publishToOrderService(OrderRequest orderRequest) {
         try {
             ObjectMapper objectMapper = new ObjectMapper();
+            log.info("Published the order");
             kafkaTemplate.send("mytopic", objectMapper.writeValueAsString(orderRequest));
         } catch (Exception e) {
             e.printStackTrace();

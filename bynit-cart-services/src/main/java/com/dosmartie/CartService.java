@@ -1,18 +1,17 @@
 package com.dosmartie;
 
-import com.dosmartie.request.CartRequest;
+import com.dosmartie.request.cart.CartRequest;
 import com.dosmartie.response.BaseResponse;
-import com.dosmartie.response.ProductResponse;
+import com.dosmartie.response.cart.ProductResponse;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
-import java.util.Objects;
 
 public interface CartService {
-    ResponseEntity<?> addToCart(CartRequest cartRequest, String authId);
-    BaseResponse<Object> clearCart(String email, String authId);
+    ResponseEntity<?> addToCart(CartRequest cartRequest, String email);
+    BaseResponse<Object> clearCart(String email);
     BaseResponse<List<ProductResponse>> clearCartItems(String userEmail);
-    BaseResponse<?> deleteItem(String userEmail, String itemSku, String authId);
+    BaseResponse<?> deleteItem(String userEmail, String itemSku);
     BaseResponse<List<ProductResponse>> viewCartItems(String userEmail);
 
 
