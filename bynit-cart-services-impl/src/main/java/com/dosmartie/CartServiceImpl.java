@@ -2,11 +2,11 @@ package com.dosmartie;
 
 
 import com.dosmartie.helper.ResponseMessage;
-import com.dosmartie.request.CartRequest;
-import com.dosmartie.request.ProductRequest;
+import com.dosmartie.request.cart.CartRequest;
+import com.dosmartie.request.cart.ProductRequest;
 import com.dosmartie.response.BaseResponse;
-import com.dosmartie.response.ProductQuantityCheckResponse;
-import com.dosmartie.response.ProductResponse;
+import com.dosmartie.response.cart.ProductQuantityCheckResponse;
+import com.dosmartie.response.cart.ProductResponse;
 import com.dosmartie.utils.EncryptionUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.BeanUtils;
@@ -41,44 +41,38 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    public ResponseEntity<?> addToCart(CartRequest cartRequest, String authId) {
+    public ResponseEntity<?> addToCart(CartRequest cartRequest, String email) {
         try {
-            if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
-                return getCartProductViaUserEmail(cartRequest.getUserEmail()).map(cart -> {
-                    try {
-                        return ResponseEntity.ok(responseMessage.setSuccessResponse("Cart updated", updateCartItem(cart, cartRequest)));
-                    } catch (OutOfQuantityException e) {
-                        return ResponseEntity.ok(responseMessage.setFailureResponse("Product Not available for purchase", e));
-                    }
-                }).orElseGet(() -> {
-                    try {
-                        return ResponseEntity.ok(responseMessage.setSuccessResponse("Product added to cart", createCart(cartRequest)));
-                    } catch (OutOfQuantityException e) {
-                        return ResponseEntity.ok(responseMessage.setFailureResponse("Product Not available for purchase", e));
-                    }
-                });
-            } else {
-                return ResponseEntity.ok(responseMessage.setUnauthorizedResponse("Access denied"));
-            }
+            cartRequest.setUserEmail(email);
+            return getCartProductViaUserEmail(cartRequest.getUserEmail()).map(cart -> {
+                try {
+                    return ResponseEntity.ok(responseMessage.setSuccessResponse("Cart updated", updateCartItem(cart, cartRequest)));
+                } catch (OutOfQuantityException e) {
+                    return ResponseEntity.ok(responseMessage.setFailureResponse("Product Not available for purchase", e));
+                }
+            }).orElseGet(() -> {
+                try {
+                    return ResponseEntity.ok(responseMessage.setSuccessResponse("Product added to cart", createCart(cartRequest)));
+                } catch (OutOfQuantityException e) {
+                    return ResponseEntity.ok(responseMessage.setFailureResponse("Product Not available for purchase", e));
+                }
+            });
+
         } catch (Exception exception) {
             return ResponseEntity.ok(responseMessage.setFailureResponse("Product is not updated cart", exception));
         }
     }
 
     @Override
-    public BaseResponse<Object> clearCart(String email, String authId) {
+    public BaseResponse<Object> clearCart(String email) {
         try {
-            if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
-                cartRepository.deleteAll();
-                return responseMessage.setSuccessResponse("Deleted Cart", null);
-            }
-            else {
-                return responseMessage.setUnauthorizedResponse("Access denied");
-            }
+            cartRepository.deleteAll();
+            return responseMessage.setSuccessResponse("Deleted Cart", null);
         } catch (Exception exception) {
             return responseMessage.setFailureResponse("Cart not cleared");
         }
     }
+
 
     @Override
     public synchronized BaseResponse<List<ProductResponse>> clearCartItems(String email) {
@@ -94,23 +88,18 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    public BaseResponse<?> deleteItem(String email, String itemSku, String authId) {
+    public BaseResponse<?> deleteItem(String email, String itemSku) {
         try {
-            if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
-                return getCartProductViaUserEmail(convertEmailToUserEmail(email)).map(cart -> {
-                    ProductResponse productResponse = cart.getCartProducts().get(convertEmailToUserEmail(email)).stream().filter((product) -> product.getSku().equals(itemSku)).findFirst().orElse(null);
-                    if (Objects.nonNull(productResponse)) {
-                        cart.getCartProducts().get(convertEmailToUserEmail(email)).remove(productResponse);
-                        cartRepository.save(cart);
-                        return responseMessage.setSuccessResponse("Item deleted", cart.getCartProducts().get(email));
-                    } else {
-                        return responseMessage.setFailureResponse("No such product found in cart");
-                    }
-                }).orElseGet(() -> responseMessage.setFailureResponse("No Cart found"));
-            }
-            else {
-                return responseMessage.setUnauthorizedResponse("Access denied");
-            }
+            return getCartProductViaUserEmail(convertEmailToUserEmail(email)).map(cart -> {
+                ProductResponse productResponse = cart.getCartProducts().get(convertEmailToUserEmail(email)).stream().filter((product) -> product.getSku().equals(itemSku)).findFirst().orElse(null);
+                if (Objects.nonNull(productResponse)) {
+                    cart.getCartProducts().get(convertEmailToUserEmail(email)).remove(productResponse);
+                    cartRepository.save(cart);
+                    return responseMessage.setSuccessResponse("Item deleted", cart.getCartProducts().get(email));
+                } else {
+                    return responseMessage.setFailureResponse("No such product found in cart");
+                }
+            }).orElseGet(() -> responseMessage.setFailureResponse("No Cart found"));
         } catch (Exception exception) {
             return responseMessage.setFailureResponse("Unable to delete product", exception);
         }
@@ -227,7 +216,6 @@ public class CartServiceImpl implements CartService {
         }
         return cart;
     }
-
 
 
     private synchronized Optional<Cart> getCartProductViaUserEmail(String email) {

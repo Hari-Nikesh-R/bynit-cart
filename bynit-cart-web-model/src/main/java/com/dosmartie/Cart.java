@@ -1,8 +1,7 @@
 package com.dosmartie;
 
-import com.dosmartie.response.ProductResponse;
+import com.dosmartie.response.cart.ProductResponse;
 import lombok.Data;
-import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 

@@ -1,4 +1,4 @@
-package com.dosmartie.response;
+package com.dosmartie.response.cart;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

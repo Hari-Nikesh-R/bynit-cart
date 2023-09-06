@@ -1,12 +1,11 @@
 package com.dosmartie.controller;
 
 import com.dosmartie.CartService;
-import com.dosmartie.helper.PropertiesCollector;
 import com.dosmartie.helper.ResponseMessage;
 import com.dosmartie.helper.Urls;
-import com.dosmartie.request.CartRequest;
+import com.dosmartie.request.cart.CartRequest;
 import com.dosmartie.response.BaseResponse;
-import com.dosmartie.response.ProductResponse;
+import com.dosmartie.response.cart.ProductResponse;
 import com.dosmartie.utils.EncryptionUtils;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,33 +30,27 @@ public class CartController {
     private ResponseMessage<List<ProductResponse>> responseMessage;
 
     @PostMapping(value = Urls.ADD_PRODUCTS)
-    public ResponseEntity<?> addToCart(@Valid @RequestBody CartRequest cartRequest, @RequestHeader(AUTH_ID) String authId) {
-        return cartService.addToCart(cartRequest, authId);
+    public ResponseEntity<?> addToCart(@Valid @RequestBody CartRequest cartRequest, @RequestHeader("email") String email) {
+        return cartService.addToCart(cartRequest, email);
     }
 
     @DeleteMapping
-    public BaseResponse<Object> clearCart(@RequestHeader(AUTH_ID) String authId, @RequestHeader(MERCHANT) String email) {
-        return cartService.clearCart(email, authId);
+    public BaseResponse<Object> clearCart(@RequestHeader(MERCHANT) String email) {
+        return cartService.clearCart(email);
     }
 
     @DeleteMapping(value = Urls.DELETE_ITEM + "/{itemSku}")
-    public BaseResponse<?> deleteCartItem(@RequestParam("email") String email, @PathVariable("itemSku") String itemSku, @RequestHeader(AUTH_ID) String authId) {
-        return cartService.deleteItem(email, itemSku, authId);
+    public BaseResponse<?> deleteCartItem(@RequestHeader("email") String email, @PathVariable("itemSku") String itemSku) {
+        return cartService.deleteItem(email, itemSku);
     }
 
     @DeleteMapping(value = Urls.CLEAR_CART)
-    public BaseResponse<List<ProductResponse>> clearCartItem(@RequestParam("email") String email, @RequestHeader(AUTH_ID) String authId) {
-        if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
-            return cartService.clearCartItems(email);
-        }
-        return responseMessage.setUnauthorizedResponse("Access denied");
+    public BaseResponse<List<ProductResponse>> clearCartItem(@RequestHeader("email") String email) {
+        return cartService.clearCartItems(email);
     }
 
     @GetMapping(value = Urls.VIEW)
-    public BaseResponse<List<ProductResponse>> getCartItems(@RequestParam("email") String email, @RequestHeader(AUTH_ID) String authId) {
-        if (encryptionUtils.decryptAuthIdAndValidateRequest(authId)) {
-            return cartService.viewCartItems(email);
-        }
-        return responseMessage.setUnauthorizedResponse("Access denied");
+    public BaseResponse<List<ProductResponse>> getCartItems(@RequestHeader("email") String email) {
+        return cartService.viewCartItems(email);
     }
 }

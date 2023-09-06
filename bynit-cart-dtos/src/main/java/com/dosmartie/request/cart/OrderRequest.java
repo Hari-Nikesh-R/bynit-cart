@@ -1,6 +1,7 @@
-package com.dosmartie.request;
+package com.dosmartie.request.cart;
 
-import com.dosmartie.response.ProductResponse;
+import com.dosmartie.request.logistic.OrderStatus;
+import com.dosmartie.response.cart.ProductResponse;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -20,5 +21,5 @@ public class OrderRequest {
     private String email;
     private List<ProductResponse> availableProduct;
     private OrderStatus orderStatus = OrderStatus.PENDING;
-    private double totalOrder;
+    private Double totalOrder;
 }

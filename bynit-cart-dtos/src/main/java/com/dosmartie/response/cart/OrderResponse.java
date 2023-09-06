@@ -1,8 +1,10 @@
-package com.dosmartie.response;
+package com.dosmartie.response.cart;
 
-import com.dosmartie.request.CustomerDetailRequest;
-import com.dosmartie.request.OrderStatus;
-import com.dosmartie.request.ProductRequest;
+import com.dosmartie.request.cart.CustomerDetailRequest;
+import com.dosmartie.request.logistic.DeliveryStatus;
+import com.dosmartie.request.logistic.OrderStatus;
+import com.dosmartie.request.cart.ProductRequest;
+import com.dosmartie.request.logistic.PaymentStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,6 +20,9 @@ public class OrderResponse {
     private OrderStatus orderStatus;
     private String orderId;
     private List<ProductRequest> availableProduct;
+    private PaymentStatus paymentStatus = PaymentStatus.PAID;
+    private DeliveryStatus deliveryStatus;
+
     private String errorDesc;
 
     public OrderResponse(String errorDesc) {

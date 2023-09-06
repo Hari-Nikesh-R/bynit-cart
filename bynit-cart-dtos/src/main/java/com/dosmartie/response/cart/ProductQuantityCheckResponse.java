@@ -1,4 +1,4 @@
-package com.dosmartie.response;
+package com.dosmartie.response.cart;
 
 import lombok.Data;
 

@@ -1,4 +1,4 @@
-package com.dosmartie.request;
+package com.dosmartie.request.cart;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
